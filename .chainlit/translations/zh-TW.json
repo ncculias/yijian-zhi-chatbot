@@ -57,7 +57,7 @@
     },
     "chat": {
         "input": {
-            "placeholder": "\u8a62\u554f\u6709\u95dc\u5937\u9593\u5fd7\u7684\u7591\u554f...",
+            "placeholder": "\u8a62\u554f\u6709\u95dc\u5937\u5805\u5fd7\u7684\u7591\u554f...",
             "actions": {
                 "send": "\u50b3\u9001\u8a0a\u606f",
                 "stop": "\u505c\u6b62\u4efb\u52d9",
