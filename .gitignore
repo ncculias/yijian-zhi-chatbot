@@ -11,7 +11,8 @@ wheels/
 .env
 
 # Chainlit
-.chainlit/translations/
+# 注意:要用 translations/* 而非 translations/,整個資料夾被忽略時內部白名單會失效
+.chainlit/translations/*
 !.chainlit/translations/zh-TW.json
 .files
 
