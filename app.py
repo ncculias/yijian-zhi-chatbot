@@ -223,7 +223,8 @@ async def answer(question: str):
     # 延伸問題改以按鈕呈現，點了直接送出，使用者不必重打一次
     body, followups = split_followups(msg.content)
     if followups:
-        msg.content = body
+        # 保留「你可以接著問：」這行標題，否則按鈕看起來像三行沒頭沒尾的文字
+        msg.content = f"{body}\n\n**{FOLLOWUP_MARKER}：**"
         msg.actions = [cl.Action(name="ask_followup", payload={"question": q}, label=q) for q in followups]
         await msg.update()
 
