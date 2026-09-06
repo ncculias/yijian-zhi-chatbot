@@ -1,4 +1,5 @@
 import logging
+import re
 import subprocess
 from typing import cast
 
@@ -31,6 +32,10 @@ MAX_SEARCH_QUERY_LENGTH = 100
 CONDENSE_HISTORY_MESSAGES = 6
 CONDENSE_MESSAGE_MAX_CHARS = 400
 
+# 系統指令要求模型在回答結尾以此開頭列出延伸問題，這裡據以抽出做成按鈕。
+FOLLOWUP_MARKER = "你可以接著問"
+MAX_FOLLOWUP_LABEL = 60
+
 
 def format_history_for_condense(history: list[BaseMessage]) -> str:
     """把對話歷史攤平成純文字，供問題改寫使用。
@@ -46,6 +51,25 @@ def format_history_for_condense(history: list[BaseMessage]) -> str:
             content = content[:CONDENSE_MESSAGE_MAX_CHARS] + "…"
         lines.append(f"{role}：{content}")
     return "\n".join(lines)
+
+
+def split_followups(answer_text: str) -> tuple[str, list[str]]:
+    """把回答拆成本文與延伸問題。
+
+    延伸問題改以按鈕呈現，因此要從本文移除，否則同樣的內容會既是文字又是按鈕。
+    模型的格式不保證穩定，解析不出東西時原樣回傳——寧可維持純文字，也不要吃掉內容。
+    """
+    body, marker, tail = answer_text.partition(FOLLOWUP_MARKER)
+    if not marker:
+        return answer_text, []
+    questions = []
+    for line in tail.splitlines():
+        q = re.sub(r"^[：:・·•\-\*\d\.\s]+", "", line).strip()
+        if 4 <= len(q) <= MAX_FOLLOWUP_LABEL:
+            questions.append(q)
+    if not questions:
+        return answer_text, []
+    return body.rstrip(), questions[:3]
 
 
 def get_shared_vector_store() -> QdrantVectorStore | None:
@@ -148,6 +172,20 @@ async def on_chat_start():
 
 @cl.on_message
 async def on_message(message: cl.Message):
+    await answer(message.content)
+
+
+@cl.action_callback("ask_followup")
+async def on_followup(action: cl.Action):
+    """使用者點了延伸問題按鈕：先把它當成使用者訊息顯示，再走一次正常的回答流程。"""
+    question = str(action.payload.get("question", "")).strip()
+    if not question:
+        return
+    await cl.Message(content=question, type="user_message").send()
+    await answer(question)
+
+
+async def answer(question: str):
     runnable = cast(Runnable, cl.user_session.get("runnable"))  # type: Runnable
     condense_runnable = cast(Runnable, cl.user_session.get("condense_runnable"))
     vector_store = cast(QdrantVectorStore, cl.user_session.get("vector_store"))
@@ -155,16 +193,16 @@ async def on_message(message: cl.Message):
 
     # 首輪直接用原句檢索；後續先依對話脈絡改寫，否則「第 2 個呢？」這類追問
     # 拿去查向量庫會檢索不到正確條目——模型即使有對話歷史，檢索端仍是瞎的。
-    search_query = message.content
+    search_query = question
     if history:
         rewritten = (
             await condense_runnable.ainvoke(
-                {"history_text": format_history_for_condense(history), "question": message.content}
+                {"history_text": format_history_for_condense(history), "question": question}
             )
         ).strip()
         if rewritten and len(rewritten) <= MAX_SEARCH_QUERY_LENGTH:
             search_query = rewritten
-            logger.info("檢索問題改寫: %r -> %r", message.content, search_query)
+            logger.info("檢索問題改寫: %r -> %r", question, search_query)
         else:
             logger.warning("改寫失敗（長度 %d），改用原句檢索: %r", len(rewritten), rewritten[:120])
 
@@ -172,7 +210,7 @@ async def on_message(message: cl.Message):
 
     async for chunk in runnable.astream(
         {
-            "question": message.content,
+            "question": question,
             "context": vector_store.similarity_search(search_query, k=10),
             "history": history,
         },
@@ -182,7 +220,15 @@ async def on_message(message: cl.Message):
 
     await msg.send()
 
-    history.extend([HumanMessage(content=message.content), AIMessage(content=msg.content)])
+    # 延伸問題改以按鈕呈現，點了直接送出，使用者不必重打一次
+    body, followups = split_followups(msg.content)
+    if followups:
+        msg.content = body
+        msg.actions = [cl.Action(name="ask_followup", payload={"question": q}, label=q) for q in followups]
+        await msg.update()
+
+    # 存進歷史的是移除延伸問題後的本文，避免那幾行問句干擾之後的追問改寫
+    history.extend([HumanMessage(content=question), AIMessage(content=body)])
     del history[:-MAX_HISTORY_MESSAGES]  # 只保留最近 MAX_HISTORY_MESSAGES 則
     cl.user_session.set("history", history)
 
