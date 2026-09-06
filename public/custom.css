@@ -1,0 +1,25 @@
+/* 把 AI 回答的複製鍵從內容下方移到訊息右上角。
+   Chainlit 預設把它和動作按鈕排在同一列，混在延伸問題按鈕之中不易辨識。
+   選擇器限定在 .ai-message 內，使用者訊息的按鈕維持原樣。 */
+.ai-message {
+  position: relative;
+}
+
+/* 讓出右上角的空間，避免第一行文字被按鈕蓋住 */
+.ai-message .message-content {
+  padding-right: 2.5rem;
+}
+
+/* 回答區內唯一帶 svg 的按鈕就是複製鍵；延伸問題按鈕是純文字，不受影響 */
+.ai-message button:has(svg) {
+  position: absolute;
+  top: -0.25rem;
+  right: 0;
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+.ai-message button:has(svg):hover,
+.ai-message button:has(svg):focus-visible {
+  opacity: 1;
+}
