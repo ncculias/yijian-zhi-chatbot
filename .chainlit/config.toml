@@ -82,7 +82,9 @@ cot = "tool_call"
 
 # Specify a CSS file that can be used to customize the user interface.
 # The CSS file can be served from the public directory or via an external link.
-custom_css = "/public/custom.css"
+# 加上版本號，否則瀏覽器會沿用快取的舊樣式，改了 custom.css 也不會生效。
+# 每次改動 custom.css 都要把 v 往上加一。
+custom_css = "/public/custom.css?v=2"
 
 # Specify additional attributes for a custom CSS file
 # custom_css_attributes = "media=\"print\""

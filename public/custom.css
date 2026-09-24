@@ -23,3 +23,30 @@
 .ai-message button:has(svg):focus-visible {
   opacity: 1;
 }
+
+/* 延伸問題按鈕加上淡底色。
+   Chainlit 預設是透明背景的純文字，和一般段落看起來沒有差別，
+   使用者不會發現可以點。按鈕本身已有 36px 高與 10px 圓角，
+   只要補上底色並放大圓角，就會呈現膠囊外觀。
+   沿用上面同一套判斷：帶 svg 的是複製鍵，純文字的才是延伸問題。 */
+.ai-message button:not(:has(svg)) {
+  background-color: rgba(0, 0, 0, 0.04);
+  border-radius: 999px;
+  margin: 0.15rem 0.35rem 0.15rem 0;
+  transition: background-color 0.15s;
+}
+
+.ai-message button:not(:has(svg)):hover,
+.ai-message button:not(:has(svg)):focus-visible {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+/* 深色模式：Chainlit 在 <html> 掛 .dark，淡黑會看不見，改用淡白 */
+html.dark .ai-message button:not(:has(svg)) {
+  background-color: rgba(255, 255, 255, 0.07);
+}
+
+html.dark .ai-message button:not(:has(svg)):hover,
+html.dark .ai-message button:not(:has(svg)):focus-visible {
+  background-color: rgba(255, 255, 255, 0.13);
+}
