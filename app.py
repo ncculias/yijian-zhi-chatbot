@@ -157,7 +157,7 @@ async def set_starters():
 async def on_chat_start():
     vector_store = get_shared_vector_store()
     cl.user_session.set("vector_store", vector_store)
-    model = ChatOpenAI(streaming=True, model="gpt-4o-mini")
+    model = ChatOpenAI(streaming=True, model=settings.llm_model)
     prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -172,7 +172,8 @@ async def on_chat_start():
                 4. 參考資料以「[資料 N] 篇名：〈某某〉／原文：……」的形式逐則列出，每一則是獨立的\n\
                 一篇故事。敘述情節時必須指明出自哪一篇，不同篇的內容不得合併成同一件事來講；\n\
                 若不同篇講的是不同人、不同事，請分開敘述。篇名一律以「篇名：」後面標示的為準，\n\
-                不可把原文的第一句話當成篇名。\n\
+                不可把原文的第一句話當成篇名。回答時只寫篇名，不要出現「[資料 N]」這類\n\
+                內部編號，那是給你辨識用的，不是給使用者看的。\n\
                 5. 條目結尾常有一句交代這則故事從何聽來、或某物後來為何人所得的句子，\n\
                 通常以「⋯⋯說」、「⋯⋯云」作結。那是記述來源與流傳經過，不是故事情節。\n\
                 回答「誰做了某件事」時，須依據正文中描述該動作的句子，不可改用結尾這類\n\
@@ -229,7 +230,7 @@ async def on_chat_start():
             ),
         ]
     )
-    condense_model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    condense_model = ChatOpenAI(model=settings.llm_model, temperature=0)
     cl.user_session.set("condense_runnable", condense_prompt | condense_model | StrOutputParser())
 
     cl.user_session.set("history", [])
