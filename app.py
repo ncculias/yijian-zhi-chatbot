@@ -5,6 +5,7 @@ import subprocess
 from typing import cast
 
 import chainlit as cl
+from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -37,6 +38,10 @@ CONDENSE_MESSAGE_MAX_CHARS = 400
 FOLLOWUP_MARKER = "你可以接著問"
 MAX_FOLLOWUP_LABEL = 60
 
+# 語料每一則的固定開頭，由 split.py 建檔時寫入：《夷堅志》篇名(南宋洪邁撰)：正文
+# 用來把篇名從正文切出來，在送進 prompt 時單獨標示。
+DOCUMENT_TITLE_PATTERN = re.compile(r"^《夷堅志》(.+?)\(南宋洪邁撰\)：(.*)$", re.DOTALL)
+
 
 def format_history_for_condense(history: list[BaseMessage]) -> str:
     """把對話歷史攤平成純文字，供問題改寫使用。
@@ -52,6 +57,27 @@ def format_history_for_condense(history: list[BaseMessage]) -> str:
             content = content[:CONDENSE_MESSAGE_MAX_CHARS] + "…"
         lines.append(f"{role}：{content}")
     return "\n".join(lines)
+
+
+def format_context(docs: list[Document]) -> str:
+    """把檢索結果整理成逐則標明篇名的純文字。
+
+    不這麼做的話，list[Document] 會以 Python 的 repr 形式進入 prompt：十則原文
+    擠成一行，中間夾著 id 與 metadata，條目之間只靠「), Document(」分隔。篇名
+    雖然就寫在 page_content 開頭，卻被埋在這串雜訊裡，模型因此容易把正文首句
+    當成篇名，也容易把相鄰條目的情節縫在一起。
+    """
+    blocks = []
+    for index, doc in enumerate(docs, start=1):
+        matched = DOCUMENT_TITLE_PATTERN.match(doc.page_content.strip())
+        if matched:
+            title, body = matched.group(1).strip(), matched.group(2).strip()
+        else:
+            # 格式不符時不猜，整段當正文保留：寧可不標篇名，也不要標錯
+            title, body = "篇名不詳", doc.page_content.strip()
+            logger.warning("檢索結果不符語料格式，無法取出篇名: %r", doc.page_content[:40])
+        blocks.append(f"[資料 {index}] 篇名：〈{title}〉\n原文：{body}")
+    return "\n\n".join(blocks)
 
 
 def split_followups(answer_text: str) -> tuple[str, list[str]]:
@@ -143,9 +169,13 @@ async def on_chat_start():
                 當使用者詢問「為什麼」、「意涵」、「反映了什麼」這類問題時，不要只複述情節，\n\
                 應進一步就宋代的社會、宗教、司法或文化背景提出分析，並以「就此推測」、「可能反映」等\n\
                 措辭標明哪些內容屬於你的詮釋，與原文事實有所區隔。\n\
-                4. 盡可能提供詳細的答案。\n\
-                5. 事實性內容只回答你有把握的部分，若問題超出你的知識範圍或無法回答，請告訴使用者。\n\
-                6. 回答完畢後，另起一段以「你可以接著問：」開頭，列出 2 至 3 個承接本次回答、\n\
+                4. 參考資料以「[資料 N] 篇名：〈某某〉／原文：……」的形式逐則列出，每一則是獨立的\n\
+                一篇故事。敘述情節時必須指明出自哪一篇，不同篇的內容不得合併成同一件事來講；\n\
+                若不同篇講的是不同人、不同事，請分開敘述。篇名一律以「篇名：」後面標示的為準，\n\
+                不可把原文的第一句話當成篇名。\n\
+                5. 盡可能提供詳細的答案。\n\
+                6. 事實性內容只回答你有把握的部分，若問題超出你的知識範圍或無法回答，請告訴使用者。\n\
+                7. 回答完畢後，另起一段以「你可以接著問：」開頭，列出 2 至 3 個承接本次回答、\n\
                 且本書確實談得到的延伸問題，每個問題獨立一行並以「・」開頭。若使用者的提問與\n\
                 《夷堅志》無關或你無法解答，仍請提供延伸問題，藉此把話題引回本書談得到的主題。\n\
                 以下是一些可能對於回答問題有幫助的參考資料：{context}\n\
@@ -178,9 +208,14 @@ async def on_chat_start():
                 "請把這句話改寫成一個「不看對話紀錄也能理解」的完整問題，供全文檢索使用，並遵守以下原則:\n"
                 "1. 只輸出改寫後的問句本身，不要回答問題，也不要加上說明、引號或前綴。\n"
                 "2. 必須是單一個問句，以問號結尾，長度不超過 50 字。\n"
-                "3. 補上被省略的主語、篇名，或序號（如「第 2 則」）實際指涉的條目名稱。\n"
-                "4. 若原句本身已經完整、不看對話紀錄也能理解，就原樣輸出。\n"
-                "5. 一律使用臺灣慣用的繁體中文。\n\n"
+                "3. 若這句話用序號或代名詞指稱前文提過的故事（如「第 2 則」「那一篇」「他」），\n"
+                "必須從對話紀錄找出它實際指的是哪一篇，並把序號或代名詞換成該篇名。\n"
+                "只改動詞句、不要只換掉量詞——把「第 2 個」寫成「第 2 則」不算完成改寫。\n"
+                "例：對話紀錄中系統列出三則故事，第 2 則是〈鐵塔神〉，使用者問「第 2 個故事的詳細內容？」，\n"
+                "應改寫為「《夷堅志》〈鐵塔神〉這則故事的詳細內容是什麼？」。\n"
+                "4. 只有在對話紀錄中確實找不到對應篇名時，才保留原本的序號或代名詞。\n"
+                "5. 若原句本身已經完整、不看對話紀錄也能理解，就原樣輸出。\n"
+                "6. 一律使用臺灣慣用的繁體中文。\n\n"
                 "改寫後的問題：",
             ),
         ]
@@ -232,7 +267,7 @@ async def answer(question: str):
     async for chunk in runnable.astream(
         {
             "question": question,
-            "context": vector_store.similarity_search(search_query, k=10),
+            "context": format_context(vector_store.similarity_search(search_query, k=10)),
             "history": history,
         },
         config=RunnableConfig(callbacks=[cl.LangchainCallbackHandler()]),
