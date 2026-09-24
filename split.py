@@ -29,6 +29,21 @@ def split_docx(input_dir: str, output_dir: str) -> None:
         current_content = ""
         file_counter = 1
 
+        # 原始 docx 中有條目被整組（篇名與正文）貼了兩次，例如〈鹽官孝婦〉與〈蕪湖儲尉〉。
+        # 照單全收會讓同一則故事在向量庫裡佔兩格，檢索命中時白白吃掉 k 的名額，
+        # 因此在寫檔前比對內容，重複的就略過。
+        written_contents: set[str] = set()
+
+        def write_entry(filename: str, content: str) -> None:
+            text = f"《夷堅志》{content.strip()}"
+            if text in written_contents:
+                logger.warning(f"Skipping duplicate entry: {text[:30]}...")
+                return
+            written_contents.add(text)
+            filepath = output_dir_path / f"{filename}.txt"
+            with filepath.open("w", encoding="utf-8") as f:
+                f.write(text)
+
         docx_files = sorted(list(input_dir_path.glob("*.docx")))
         if not docx_files:
             raise FileNotFoundError(f"No .docx files found in '{input_dir_path}'.")
@@ -40,18 +55,14 @@ def split_docx(input_dir: str, output_dir: str) -> None:
             for paragraph in doc.paragraphs:
                 if is_bold(paragraph):
                     if current_filename and current_content:
-                        filepath = output_dir_path / f"{current_filename}.txt"
-                        with filepath.open("w", encoding="utf-8") as f:
-                            f.write(f"《夷堅志》{current_content.strip()}")
+                        write_entry(current_filename, current_content)
                     current_filename = f"{file_counter:08d}"
                     file_counter += 1
                     current_content = paragraph.text + "(南宋洪邁撰)："
                 elif current_filename:
                     current_content += paragraph.text
         if current_filename and current_content:
-            filepath = output_dir_path / f"{current_filename}.txt"
-            with filepath.open("w", encoding="utf-8") as f:
-                f.write(f"《夷堅志》{current_content.strip()}")
+            write_entry(current_filename, current_content)
 
         logger.info(
             f"All Word documents in '{input_dir_path}' have been successfully split and saved to '{output_dir_path}'."
