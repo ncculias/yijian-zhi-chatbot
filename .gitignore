@@ -18,3 +18,9 @@ wheels/
 
 # Logging
 logs
+
+# macOS
+.DS_Store
+
+# 本機開發用的 compose 覆寫(port 衝突時使用)
+docker-compose.local.yml
