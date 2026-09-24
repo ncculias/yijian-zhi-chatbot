@@ -157,7 +157,7 @@ async def set_starters():
 async def on_chat_start():
     vector_store = get_shared_vector_store()
     cl.user_session.set("vector_store", vector_store)
-    model = ChatOpenAI(streaming=True, model="gpt-4o-mini")
+    model = ChatOpenAI(streaming=True, model=settings.llm_model)
     prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -172,10 +172,20 @@ async def on_chat_start():
                 4. 參考資料以「[資料 N] 篇名：〈某某〉／原文：……」的形式逐則列出，每一則是獨立的\n\
                 一篇故事。敘述情節時必須指明出自哪一篇，不同篇的內容不得合併成同一件事來講；\n\
                 若不同篇講的是不同人、不同事，請分開敘述。篇名一律以「篇名：」後面標示的為準，\n\
-                不可把原文的第一句話當成篇名。\n\
-                5. 盡可能提供詳細的答案。\n\
-                6. 事實性內容只回答你有把握的部分，若問題超出你的知識範圍或無法回答，請告訴使用者。\n\
-                7. 回答完畢後，另起一段以「你可以接著問：」開頭，列出 2 至 3 個承接本次回答、\n\
+                不可把原文的第一句話當成篇名。回答時只寫篇名，不要出現「[資料 N]」這類\n\
+                內部編號，那是給你辨識用的，不是給使用者看的。\n\
+                5. 條目結尾常有一句交代這則故事從何聽來、或某物後來為何人所得的句子，\n\
+                通常以「⋯⋯說」、「⋯⋯云」作結。那是記述來源與流傳經過，不是故事情節。\n\
+                回答「誰做了某件事」時，須依據正文中描述該動作的句子，不可改用結尾這類\n\
+                交代後續或出處的句子作答，也不可把其中的人物寫成故事裡的角色。\n\
+                並非每一則都有這樣的結尾；沒有的時候就不要提及來源，更不可自行補上\n\
+                一個來源。參考資料以外的人名一律不得出現，包括本規則所舉的例子。\n\
+                6. 回答前先核對提問的前提是否與原文相符。若使用者的問題預設了原文沒有\n\
+                記載的事，例如問某人為何而死、但原文並未記載其死亡，必須明確指出原文\n\
+                未記載該事，不得順著前提推測或補述情節。\n\
+                7. 盡可能提供詳細的答案。\n\
+                8. 事實性內容只回答你有把握的部分，若問題超出你的知識範圍或無法回答，請告訴使用者。\n\
+                9. 回答完畢後，另起一段以「你可以接著問：」開頭，列出 2 至 3 個承接本次回答、\n\
                 且本書確實談得到的延伸問題，每個問題獨立一行並以「・」開頭。若使用者的提問與\n\
                 《夷堅志》無關或你無法解答，仍請提供延伸問題，藉此把話題引回本書談得到的主題。\n\
                 以下是一些可能對於回答問題有幫助的參考資料：{context}\n\
@@ -220,7 +230,7 @@ async def on_chat_start():
             ),
         ]
     )
-    condense_model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    condense_model = ChatOpenAI(model=settings.llm_model, temperature=0)
     cl.user_session.set("condense_runnable", condense_prompt | condense_model | StrOutputParser())
 
     cl.user_session.set("history", [])
