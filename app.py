@@ -205,7 +205,11 @@ async def on_chat_start():
     cl.user_session.set("runnable", runnable)
 
     # 追問改寫：把「第 2 則呢？」這類依賴前文的問題，補成不看對話也能理解的完整問題，
-    # 供向量檢索使用。屬內部步驟，不需串流；temperature 設 0 讓改寫結果穩定。
+    # 供向量檢索使用。屬內部步驟，不需串流。
+    #
+    # 刻意不指定 temperature：部分模型（如 gpt-5.6-luna）只接受預設值，傳 0 會回
+    # 400 Unsupported value，導致每一次追問都失敗。改寫的穩定性改由三道機制保障：
+    # 指令明確、輸出長度上限、失敗時退回原句檢索。
     #
     # 這裡刻意「不」用 MessagesPlaceholder 把歷史當成真實對話輪次送入：那樣模型會
     # 順著對話繼續作答而非改寫。改為把歷史當成資料貼在指令中，並把改寫指令放在
@@ -233,7 +237,7 @@ async def on_chat_start():
             ),
         ]
     )
-    condense_model = ChatOpenAI(model=settings.llm_model, temperature=0)
+    condense_model = ChatOpenAI(model=settings.llm_model)
     cl.user_session.set("condense_runnable", condense_prompt | condense_model | StrOutputParser())
 
     cl.user_session.set("history", [])
