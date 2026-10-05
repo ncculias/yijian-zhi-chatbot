@@ -12,6 +12,18 @@
 
 <!-- 已合併但尚未部署上線的變更寫在這裡,部署時移到新版本號下 -->
 
+### Added
+
+- 對話下載:網頁右上角新增「下載」按鈕,把當前對話匯出為 Markdown 檔,
+  檔頭含日期與網址,供貼進研究筆記或報告。純前端實作,不影響回答流程。
+  需求見 `docs/prd/PRD-對話下載.md`
+
+### Changed
+
+- `custom_js` 改指向新的載入器 `public/custom.js`,以同時載入多支前端腳本;
+  `remove-watermark.js` 補上 `readyState` 判斷,因改為動態載入後
+  `DOMContentLoaded` 可能已觸發完畢
+
 ## [1.2.1] - 2026-10-04
 
 ### Fixed

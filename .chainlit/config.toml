@@ -91,7 +91,7 @@ custom_css = "/public/custom.css?v=2"
 
 # Specify a JavaScript file that can be used to customize the user interface.
 # The JavaScript file can be served from the public directory.
-custom_js = "/public/remove-watermark.js"
+custom_js = "/public/custom.js?v=1"
 
 # Specify additional attributes for custom JS file
 # custom_js_attributes = "async type = \"module\""

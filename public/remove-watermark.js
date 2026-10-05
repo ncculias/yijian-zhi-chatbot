@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function () {
+function initWatermarkHiding() {
     function overrideTargetElement() {
     const targetElement = document.querySelector('.MuiStack-root.watermark') || document.querySelector('.watermark');
     console.log(targetElement);
@@ -25,4 +25,12 @@ for (const mutation of mutationsList) {
 
 observer.observe(document.body, { childList: true, subtree: true });
     overrideTargetElement();
-});
+}
+
+// 本檔可能在 DOMContentLoaded 之後才由 custom.js 動態載入，
+// 屆時該事件不會再觸發，需直接初始化。
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWatermarkHiding);
+} else {
+    initWatermarkHiding();
+}
